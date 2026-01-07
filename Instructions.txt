@@ -1,0 +1,252 @@
+=====================================================
+instructions.txt
+Backend Instructions — Speech‑to‑Intent System
+=====================================================
+
+1. BACKEND CONTEXT / GOAL
+------------------------
+You are implementing the backend for a speech‑to‑intent assistive system.
+
+Responsibilities:
+- Receive short .wav audio recorded from a patient
+- Send audio to an Azure ML endpoint running Wav2Vec
+- Receive ML response (embedding or intent)
+- Apply backend business logic (confidence, confirmation, actions)
+- Return a structured JSON response to frontend
+- Optionally log events (no raw audio storage by default)
+
+The backend MUST NOT:
+- Run ML models locally
+- Perform speech‑to‑text
+- Expose Azure ML keys to the frontend
+
+-----------------------------------------------------
+
+2. HIGH‑LEVEL ARCHITECTURE
+-------------------------
+Frontend (Web / Mobile)
+   |
+   |  POST /api/audio (.wav)
+   |
+Backend API (Node.js / Python)
+   |
+   |  HTTP POST
+   |
+Azure ML Endpoint (Wav2Vec)
+   |
+   |  returns embedding / intent
+   |
+Backend Logic
+   |
+   |  JSON response
+   |
+Frontend UI
+
+-----------------------------------------------------
+
+3. BACKEND TECH STACK
+--------------------
+Recommended options:
+
+Option A (Preferred):
+- Python FastAPI
+- Uvicorn
+- requests / httpx
+
+Optional DB:
+- SQLite or PostgreSQL (for logs only)
+
+-----------------------------------------------------
+
+4. API ENDPOINTS
+----------------
+
+4.1 POST /api/audio   (MAIN ENDPOINT)
+
+Purpose:
+Accept patient audio and return detected intent + UI actions.
+
+Request:
+- Content-Type: multipart/form-data
+- Field name: audio
+- File type: .wav
+- Max duration: 3 seconds
+- Max size: 1 MB
+
+Processing steps (MANDATORY ORDER):
+1. Validate file exists
+2. Validate .wav extension
+3. Read file as raw bytes
+4. Send raw bytes to Azure ML endpoint
+5. Receive ML response
+6. Apply backend logic
+7. Return structured JSON
+
+Example response:
+{
+  "intent": "HELP",
+  "confidence": 0.87,
+  "status": "confirmed",
+  "ui_options": ["Confirm Help", "Cancel"],
+  "next_action": "await_user_confirmation"
+}
+
+-----------------------------------------------------
+
+4.2 GET /api/health
+
+Purpose:
+Health check for frontend and monitoring.
+
+Response:
+{
+  "status": "ok",
+  "ml_endpoint": "reachable"
+}
+
+-----------------------------------------------------
+
+5. AZURE ML INTEGRATION
+----------------------
+
+Environment Variables (REQUIRED):
+- AZURE_ML_SCORING_URL
+- AZURE_ML_API_KEY
+
+Azure ML Request:
+- Method: POST
+- URL: AZURE_ML_SCORING_URL
+- Headers:
+  Authorization: Bearer <AZURE_ML_API_KEY>
+  Content-Type: application/octet-stream
+- Body: raw .wav bytes (NO base64, NO JSON)
+
+Expected ML responses:
+
+Option A (current MVP):
+{
+  "embedding_dim": 768
+}
+
+Option B (later):
+{
+  "intent": "HELP",
+  "confidence": 0.92
+}
+
+Backend must handle BOTH formats.
+
+-----------------------------------------------------
+
+6. BUSINESS LOGIC
+-----------------
+
+Confidence thresholds:
+- confidence >= 0.75  → confirmed
+- 0.4 <= confidence < 0.75 → needs_confirmation
+- confidence < 0.4 → uncertain
+
+Intent behavior:
+- HELP → ask confirmation
+- EMERGENCY → immediate alert flow
+- WATER → confirm + notify caregiver
+- YES / NO → resolve confirmation
+- UNKNOWN → ask user to repeat
+
+Example decision logic:
+IF intent == EMERGENCY AND confidence > 0.8
+    status = auto_triggered
+    next_action = trigger_alert
+ELSE IF confidence < 0.4
+    status = uncertain
+    next_action = ask_repeat
+ELSE
+    status = needs_confirmation
+    next_action = show_options
+
+-----------------------------------------------------
+
+7. UI OPTIONS (BACKEND DRIVEN)
+------------------------------
+
+HELP:
+["Confirm Help", "Cancel"]
+
+EMERGENCY:
+["Cancel Emergency"]
+
+UNCERTAIN:
+["Repeat", "Cancel"]
+
+Frontend must render buttons exactly as provided.
+
+-----------------------------------------------------
+
+8. OPTIONAL DATABASE
+--------------------
+
+Purpose:
+Logging and demo audit.
+
+Store:
+- timestamp
+- intent
+- confidence
+- status
+- latency_ms
+
+DO NOT store raw audio by default.
+
+-----------------------------------------------------
+
+9. PATIENT AUDIO FLOW
+---------------------
+
+1. Patient presses Record
+2. Frontend records 1–3 sec audio
+3. Frontend sends .wav to /api/audio
+4. Backend calls Azure ML
+5. Backend returns intent + UI options
+6. Patient confirms / cancels
+7. Backend triggers final action
+
+-----------------------------------------------------
+
+10. SECURITY RULES
+-----------------
+- Validate file type and size
+- Rate limit /api/audio
+- Never expose Azure ML keys
+- Use HTTPS only
+- Log failures safely
+
+-----------------------------------------------------
+
+11. ERROR HANDLING
+-----------------
+
+Invalid audio:
+{
+  "error": "invalid_audio"
+}
+
+ML timeout:
+{
+  "error": "ml_unavailable",
+  "message": "Please try again"
+}
+
+-----------------------------------------------------
+
+12. DEPLOYMENT NOTES
+-------------------
+- Backend can run on:
+  - Azure App Service
+  - Azure Functions (HTTP trigger)
+- Backend is lightweight
+- Azure ML endpoint can be stopped independently to save cost
+
+-----------------------------------------------------
+
+END OF FILE
+=====================================================
