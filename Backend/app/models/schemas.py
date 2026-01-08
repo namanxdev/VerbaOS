@@ -19,7 +19,7 @@ class IntentResponse(BaseModel):
 class HealthResponse(BaseModel):
     """Response model for health check endpoint."""
     status: str
-    ml_endpoint: str
+    ml_endpoints: dict  # Status for each model (hubert, wave2vec)
 
 
 class ErrorResponse(BaseModel):

@@ -17,18 +17,24 @@ async def health_check():
     
     Verifies that:
     - Backend API is running
-    - Azure ML endpoint is reachable
+    - Azure ML endpoints are reachable (HuBERT primary, Wav2Vec fallback)
     
     Use this endpoint for:
     - Load balancer health checks
     - Frontend connectivity verification
     - Monitoring and alerting
     """
-    is_ml_reachable = await check_ml_endpoint_health()
+    ml_health = await check_ml_endpoint_health()
+    
+    # System is healthy if at least one endpoint is reachable
+    any_reachable = (
+        ml_health["hubert"]["reachable"] or 
+        ml_health["wave2vec"]["reachable"]
+    )
     
     return HealthResponse(
-        status="ok",
-        ml_endpoint="reachable" if is_ml_reachable else "unreachable",
+        status="ok" if any_reachable else "degraded",
+        ml_endpoints=ml_health,
     )
 
 

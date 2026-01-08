@@ -12,9 +12,13 @@ load_dotenv()
 class Settings:
     """Application settings loaded from environment variables."""
     
-    # Azure ML Configuration
-    AZURE_ML_SCORING_URL: str = os.getenv("REST_END_POINT") or os.getenv("AZURE_ML_SCORING_URL", "")
-    AZURE_ML_API_KEY: str = os.getenv("PRIMARY_KEY") or os.getenv("AZURE_ML_API_KEY", "")
+    # Azure ML Configuration - HuBERT (Primary)
+    HUBERT_SCORING_URL: str = os.getenv("REST_END_POINT__HUBERT", "")
+    HUBERT_API_KEY: str = os.getenv("PRIMARY_KEY__HUBERT", "")
+    
+    # Azure ML Configuration - Wav2Vec (Fallback)
+    WAVE2VEC_SCORING_URL: str = os.getenv("REST_END_POINT__WAVE2VEC", "")
+    WAVE2VEC_API_KEY: str = os.getenv("PRIMARY_KEY__WAVE2VEC", "")
     
     # Audio Constraints
     MAX_AUDIO_SIZE_BYTES: int = 1 * 1024 * 1024  # 1 MB
@@ -37,8 +41,10 @@ class Settings:
 
 settings = Settings()
 
-# Validate required settings
-if not settings.AZURE_ML_SCORING_URL:
-    raise RuntimeError("Azure ML scoring URL not configured. Set REST_END_POINT or AZURE_ML_SCORING_URL in .env")
-if not settings.AZURE_ML_API_KEY:
-    raise RuntimeError("Azure ML API key not configured. Set PRIMARY_KEY or AZURE_ML_API_KEY in .env")
+# Validate required settings - at least one model must be configured
+if not settings.HUBERT_SCORING_URL and not settings.WAVE2VEC_SCORING_URL:
+    raise RuntimeError("No Azure ML endpoints configured. Set REST_END_POINT__HUBERT or REST_END_POINT__WAVE2VEC in .env")
+if settings.HUBERT_SCORING_URL and not settings.HUBERT_API_KEY:
+    raise RuntimeError("HuBERT API key not configured. Set PRIMARY_KEY__HUBERT in .env")
+if settings.WAVE2VEC_SCORING_URL and not settings.WAVE2VEC_API_KEY:
+    raise RuntimeError("Wav2Vec API key not configured. Set PRIMARY_KEY__WAVE2VEC in .env")
