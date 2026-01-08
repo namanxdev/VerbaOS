@@ -19,7 +19,7 @@ const RecordButton = ({ isRecording, onClick }) => {
         `}
       >
         {isRecording ? (
-          <Square className="w-8 h-8 text-rose-500 dark:text-rose-400 fill-current" />
+          <Square className="w-8 h-8 text-slate-600 dark:text-slate-300 fill-current" />
         ) : (
           <Mic className="w-9 h-9 text-slate-500 dark:text-slate-400" />
         )}
@@ -31,9 +31,7 @@ const RecordButton = ({ isRecording, onClick }) => {
           px-6 py-2.5 rounded-full text-sm font-medium tracking-wide
           bg-neu-base dark:bg-neu-base-dark
           shadow-neu-btn-sm dark:shadow-neu-btn-dark
-          ${isRecording 
-            ? 'text-rose-500 dark:text-rose-400' 
-            : 'text-slate-500 dark:text-slate-400'}
+          text-slate-500 dark:text-slate-400
         `}
         animate={{ opacity: isRecording ? [1, 0.6, 1] : 1 }}
         transition={{ duration: 1.5, repeat: isRecording ? Infinity : 0 }}

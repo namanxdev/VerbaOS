@@ -27,7 +27,7 @@ export default function ListeningWave({ status }) {
           bars.map((bar) => (
             <motion.div
               key={bar}
-              className="w-2 rounded-full bg-rose-500/80 dark:bg-rose-400/80"
+              className="w-2 rounded-full bg-slate-500/80 dark:bg-slate-400/80"
               animate={{
                 height: [16, 40, 16],
               }}
