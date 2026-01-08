@@ -18,12 +18,12 @@ module.exports = {
     extend: {
       colors: {
         neu: {
-          base: '#EEF1F6',
-          'base-dark': '#2D3748', // Dark cooling gray
-          dark: '#D1D9E6',
-          light: '#FFFFFF',
-          text: '#7D8CA3',
-          'text-dark': '#CBD5E0',
+          base: '#e8ecef',
+          'base-dark': '#2a2d3a',
+          dark: '#c8ccd0',
+          light: '#ffffff',
+          text: '#6b7280',
+          'text-dark': '#9ca3af',
         },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -60,13 +60,19 @@ module.exports = {
         },
       },
       boxShadow: {
-        'neu-flat': '9px 9px 16px rgb(209, 217, 230, 0.6), -9px -9px 16px rgba(255, 255, 255, 0.8)',
-        'neu-pressed': 'inset 6px 6px 10px 0 rgb(209, 217, 230, 0.8), inset -6px -6px 10px 0 rgba(255, 255, 255, 0.8)',
-        'neu-icon': '5px 5px 10px rgb(209, 217, 230, 0.6), -5px -5px 10px rgba(255, 255, 255, 0.8)',
+        // Soft neumorphic shadows (stronger)
+        'neu-flat': '10px 10px 20px #c4c8cc, -10px -10px 20px #ffffff',
+        'neu-pressed': 'inset 6px 6px 12px #c4c8cc, inset -6px -6px 12px #ffffff',
+        'neu-convex': '10px 10px 20px #c4c8cc, -10px -10px 20px #ffffff, inset 2px 2px 4px #ffffff, inset -2px -2px 4px #c4c8cc',
+        'neu-icon': '6px 6px 12px #c4c8cc, -6px -6px 12px #ffffff',
+        'neu-btn': '8px 8px 16px #c4c8cc, -8px -8px 16px #ffffff',
+        'neu-btn-sm': '5px 5px 10px #c4c8cc, -5px -5px 10px #ffffff',
         
-        // Dark Mode Shadows
-        'neu-flat-dark': '5px 5px 10px #1a202c, -5px -5px 10px #404e67',
-        'neu-pressed-dark': 'inset 5px 5px 10px #1a202c, inset -5px -5px 10px #404e67',
+        // Dark Mode Shadows (stronger)
+        'neu-flat-dark': '10px 10px 20px #1a1c24, -10px -10px 20px #3a3e50',
+        'neu-pressed-dark': 'inset 6px 6px 12px #1a1c24, inset -6px -6px 12px #3a3e50',
+        'neu-convex-dark': '10px 10px 20px #1a1c24, -10px -10px 20px #3a3e50, inset 2px 2px 4px #3a3e50, inset -2px -2px 4px #1a1c24',
+        'neu-btn-dark': '8px 8px 16px #1a1c24, -8px -8px 16px #3a3e50',
       },
       borderRadius: {
         lg: "var(--radius)",

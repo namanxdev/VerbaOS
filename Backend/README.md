@@ -1,14 +1,16 @@
 # 🏥 Patient Speech-to-Intent Backend
 
-A specialized FastAPI backend designed for assistive patient care systems. It processes voice commands (like "Help me", "Water", "Emergency") by routing audio to an Azure ML `wav2vec2` endpoint and applying robust business logic to ensure safety and accuracy.
+A specialized FastAPI backend designed for assistive patient care systems, **optimized for stroke/aphasia patients** with impaired speech. It processes voice commands (like "Help me", "Water", "Emergency") using a **hybrid classification system** that combines acoustic pattern recognition (HuBERT) with speech transcription (Wav2Vec2).
 
 ## 🌟 Key Features
 
-- **Speech-to-Intent Engine**: Converts raw audio to structured intents (`HELP`, `EMERGENCY`, `WATER`, `YES`, `NO`).
-- **Fuzzy Transcription Matching**: Automatically corrects garbled model outputs (e.g., maps `ALPE` → `HELP`) common with base Wav2Vec2 models.
-- **Confidence Scoring**: Categorizes intents into `confirmed`, `needs_confirmation`, or `uncertain`.
-- **Safety First**: High-confidence "EMERGENCY" creates an immediate trigger action.
-- **Azure ML Integration**: Seamlessly connects to deployed inference endpoints.
+- **Hybrid Speech-to-Intent Engine**: Combines HuBERT (acoustic embeddings) + Wav2Vec2 (transcription) for maximum accuracy with impaired speech
+- **Advanced Embedding Classification**: Weighted K-Nearest Neighbors with centroid matching, optimized for varied aphasia speech patterns
+- **Phonetic Matching**: Custom Soundex-like algorithm handles common aphasia speech patterns (consonant deletion, vowel substitution, slurred speech)
+- **Fuzzy Pattern Matching**: Catches garbled transcriptions like `ALPE` → `HELP`, `wawa` → `WATER`
+- **Confidence Calibration**: Realistic uncertainty estimates based on prediction margin and training data quality
+- **Learning Loop**: System improves over time as caregivers confirm patient intents
+- **Safety First**: High-confidence "EMERGENCY" triggers immediate alerts
 
 ---
 
@@ -18,12 +20,45 @@ A specialized FastAPI backend designed for assistive patient care systems. It pr
 graph TD
     User((Patient)) -->|Mic Input| Frontend[Frontend App]
     Frontend -->|POST .wav| Backend[FastAPI Backend]
-    Backend -->|Raw Audio| AzureML[Azure Wav2Vec2 Endpoint]
-    AzureML -->|Transcription| Backend
-    Backend -->|Business Logic| Backend
+    Backend -->|Audio| HuBERT[HuBERT - Acoustic Embeddings]
+    Backend -->|Audio| Wav2Vec[Wav2Vec2 - Transcription]
+    HuBERT -->|768-d Vector| Classifier[Intent Classifier]
+    Wav2Vec -->|Text| Phonetic[Phonetic Matcher]
+    Classifier -->|Intent + Score| Combiner[Hybrid Combiner]
+    Phonetic -->|Intent + Score| Combiner
+    Combiner -->|Final Intent| Backend
     Backend -->|JSON Response| Frontend
     Frontend -->|Display UI| User
 ```
+
+### Classification Pipeline
+
+1. **Audio Input**: Patient speaks into microphone (1-3 seconds)
+2. **Model Processing**:
+   - **HuBERT**: Extracts 768-dimensional audio embeddings (acoustic patterns)
+   - **Wav2Vec2**: Produces text transcription
+3. **Intent Classification**:
+   - **Embedding-based**: Weighted KNN against stored reference samples
+   - **Transcription-based**: Multi-stage phonetic + keyword matching
+4. **Hybrid Combination**: Weighted fusion (60% HuBERT, 40% Wav2Vec)
+5. **Confidence Calibration**: Adjusts based on margin and training data
+
+---
+
+## 📊 Supported Intents
+
+| Intent | Description | Example Phrases (including aphasia variants) |
+|--------|-------------|---------------------------------------------|
+| HELP | General assistance | "help", "hep", "elp", "please" |
+| WATER | Thirst/hydration | "water", "wawa", "thirsty" |
+| YES | Affirmative | "yes", "ya", "yeh", "okay" |
+| NO | Negative | "no", "nah", "stop" |
+| PAIN | Discomfort | "pain", "ow", "hurts" |
+| EMERGENCY | Urgent medical | "emergency", "doctor", "help now" |
+| BATHROOM | Toileting | "bathroom", "potty", "pee" |
+| TIRED | Rest/sleep | "tired", "sleep", "rest" |
+| COLD | Temperature | "cold", "blanket", "freezing" |
+| HOT | Temperature | "hot", "warm", "fan" |
 
 ---
 
@@ -31,7 +66,9 @@ graph TD
 
 ### 1. Prerequisites
 - Python 3.10 or higher
-- An active Azure ML Endpoint (deployed with `wav2vec2-base-960h` or similar)
+- Azure ML Endpoints deployed:
+  - **HuBERT** (primary): For acoustic embeddings
+  - **Wav2Vec2** (fallback): For transcription
 - FFmpeg (optional, for audio conversion)
 
 ### 2. Installation

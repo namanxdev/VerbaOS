@@ -1,8 +1,6 @@
-import NeumorphicCard from '../ui/NeumorphicCard';
-import { Button } from '../ui/button';
+import { motion } from 'framer-motion';
 
 const ActionButtons = ({ intent, onAction }) => {
-  // If intent is not one of the known ones, show default actions or generic ones
   // Mapping intent to possible follow-up actions
   const actionsMap = {
     water: ["Log Hydration", "Notify Nurse"],
@@ -20,14 +18,15 @@ const ActionButtons = ({ intent, onAction }) => {
   return (
     <div className="flex flex-wrap gap-4 justify-center mt-8">
       {currentActions.map((action, idx) => (
-        <Button
+        <motion.button
           key={idx}
           onClick={() => onAction && onAction(action)}
+          whileTap={{ scale: 0.97 }}
           aria-label={`Select action: ${action}`}
-          className="bg-neu-base dark:bg-neu-base-dark text-slate-700 dark:text-slate-200 shadow-neu-flat dark:shadow-neu-flat-dark hover:shadow-neu-pressed dark:hover:shadow-neu-pressed-dark hover:translate-y-[1px] hover:text-blue-600 dark:hover:text-blue-400 transition-all border border-white/60 dark:border-white/10 rounded-2xl px-10 py-8 h-auto text-lg font-semibold tracking-wide"
+          className="bg-neu-base dark:bg-neu-base-dark text-slate-600 dark:text-slate-300 shadow-neu-btn dark:shadow-neu-btn-dark hover:shadow-neu-flat dark:hover:shadow-neu-flat-dark active:shadow-neu-pressed dark:active:shadow-neu-pressed-dark transition-all rounded-full px-8 py-4 text-sm font-medium"
         >
           {action}
-        </Button>
+        </motion.button>
       ))}
     </div>
   );

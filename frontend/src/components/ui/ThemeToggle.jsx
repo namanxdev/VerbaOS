@@ -21,19 +21,20 @@ const ThemeToggle = () => {
       onClick={() => setTheme(theme === 'dark' ? 'light' : 'dark')}
       whileTap={{ scale: 0.95 }}
       className={`
-        relative p-3 rounded-full flex items-center justify-center
-        transition-all duration-300
+        relative w-11 h-11 rounded-full flex items-center justify-center
+        transition-all duration-200
         bg-neu-base dark:bg-neu-base-dark
-        shadow-neu-flat dark:shadow-neu-flat-dark
-        text-neu-text dark:text-neu-text-dark
-        hover:text-primary dark:hover:text-blue-400
+        shadow-neu-btn dark:shadow-neu-btn-dark
+        hover:shadow-neu-flat dark:hover:shadow-neu-flat-dark
+        active:shadow-neu-pressed dark:active:shadow-neu-pressed-dark
+        text-slate-500 dark:text-slate-400
       `}
       aria-label="Toggle Theme"
     >
       {theme === 'dark' ? (
-        <Sun className="w-6 h-6" />
+        <Sun className="w-5 h-5" />
       ) : (
-        <Moon className="w-6 h-6" />
+        <Moon className="w-5 h-5" />
       )}
     </motion.button>
   );

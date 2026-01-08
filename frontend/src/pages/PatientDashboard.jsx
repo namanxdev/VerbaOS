@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Toaster } from '../components/ui/toaster'
 import { useToast } from '../hooks/use-toast'
 import { Button } from '../components/ui/button'
@@ -9,18 +10,34 @@ import ActionButtons from '../components/app/ActionButtons'
 import FeedbackButtons from '../components/app/FeedbackButtons'
 import DiagramLayout from '../components/app/DiagramLayout'
 import ThemeToggle from '../components/ui/ThemeToggle'
-import VisitorCounter from '../components/app/VisitorCounter'
+import NeumorphicCard from '../components/ui/NeumorphicCard'
 import { useAudioRecorder } from '../hooks/useAudioRecorder'
-import { sendAudioToBackend, submitFeedback } from '../services/api'
+import { 
+  sendAudioToBackend, 
+  submitFeedback, 
+  sendNotification,
+  getPatientCaretakers,
+  linkCaretaker,
+  getUsers
+} from '../services/api'
 import { motion, AnimatePresence } from 'framer-motion'
 
 
-export default function Home() {
-  // states: idle, recording, processing, result, feedback_submitted
+export default function PatientDashboard() {
+  const navigate = useNavigate()
+  
+  // User state
+  const [user, setUser] = useState(null)
+  const [caretakers, setCaretakers] = useState([])
+  const [showAddCaretaker, setShowAddCaretaker] = useState(false)
+  const [availableCaretakers, setAvailableCaretakers] = useState([])
+  
+  // App states: idle, recording, processing, result, feedback_submitted
   const [appState, setAppState] = useState('idle') 
   const [result, setResult] = useState(null)
   const [feedbackSubmitting, setFeedbackSubmitting] = useState(false)
   const [feedbackResult, setFeedbackResult] = useState(null)
+  const [notificationSent, setNotificationSent] = useState(false)
   
   const { startRecording, stopRecording, isRecording, audioBlob, error: recorderError } = useAudioRecorder()
   const { toast } = useToast()
@@ -28,12 +45,43 @@ export default function Home() {
   // Steps for the Diagram: 0=Input, 1=Encoder, 2=Classifier, 3=Output
   const [diagramStep, setDiagramStep] = useState(0)
 
+  // Check user session on mount
+  useEffect(() => {
+    const savedUser = localStorage.getItem('speechIntentUser')
+    if (!savedUser) {
+      navigate('/')
+      return
+    }
+    
+    const userData = JSON.parse(savedUser)
+    if (userData.role !== 'patient') {
+      navigate('/')
+      return
+    }
+    
+    setUser(userData)
+    
+    // Only try to load caretakers if not a local-only session
+    if (!userData.id.startsWith('local_')) {
+      loadCaretakers(userData.id)
+    }
+  }, [navigate])
+
+  const loadCaretakers = async (patientId) => {
+    try {
+      const data = await getPatientCaretakers(patientId)
+      setCaretakers(data.caretakers || [])
+    } catch (err) {
+      console.error('Failed to load caretakers:', err)
+    }
+  }
+
   useEffect(() => {
     switch (appState) {
         case 'idle': setDiagramStep(0); break;
-        case 'recording': setDiagramStep(1); break; // Activating Encoder as we speak
-        case 'processing': setDiagramStep(2); break; // Classifier
-        case 'result': setDiagramStep(3); break; // Output
+        case 'recording': setDiagramStep(1); break;
+        case 'processing': setDiagramStep(2); break;
+        case 'result': setDiagramStep(3); break;
         case 'error': setDiagramStep(0); break;
     }
   }, [appState]);
@@ -59,21 +107,25 @@ export default function Home() {
   const handleStart = async () => {
     setAppState('recording')
     setResult(null)
+    setNotificationSent(false)
     await startRecording()
   }
 
   const handleStop = () => {
     stopRecording()
-    // appState remains 'recording' until blob is ready in effect
   }
 
   const handleAudioUpload = async (blob) => {
     setAppState('processing')
     try {
       const data = await sendAudioToBackend(blob)
-      
       setResult(data)
       setAppState('result')
+      
+      // Automatically send notification to caretakers if we have any
+      if (caretakers.length > 0 && user) {
+        sendNotificationToCaretakers(data)
+      }
     } catch (err) {
       console.error(err)
       toast({
@@ -86,6 +138,25 @@ export default function Home() {
     }
   }
 
+  const sendNotificationToCaretakers = async (resultData) => {
+    try {
+      await sendNotification(
+        user.id,
+        resultData.intent,
+        resultData.confidence,
+        resultData.transcription
+      )
+      setNotificationSent(true)
+      toast({
+        title: "📢 Caretakers Notified",
+        description: `Your ${caretakers.length} caretaker(s) have been alerted.`,
+        className: "bg-blue-50 dark:bg-blue-900/30 border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200"
+      })
+    } catch (err) {
+      console.error('Failed to send notification:', err)
+    }
+  }
+
   const handleAction = (action) => {
     toast({
       title: "Action Confirmed",
@@ -93,11 +164,11 @@ export default function Home() {
       className: "bg-neu-base border-white/50 text-neu-dark shadow-neu-flat"
     })
     
-    // Reset to idle
     setTimeout(() => {
         setAppState('idle')
         setResult(null)
         setFeedbackResult(null)
+        setNotificationSent(false)
     }, 2000)
   }
 
@@ -122,7 +193,6 @@ export default function Home() {
         className: "bg-green-50 dark:bg-green-900/30 border-green-200 dark:border-green-800 text-green-800 dark:text-green-200"
       })
 
-      // If correction was made, show success state
       if (!isCorrect && correctIntent) {
         setAppState('feedback_submitted')
       }
@@ -142,32 +212,93 @@ export default function Home() {
     setAppState('idle')
     setResult(null)
     setFeedbackResult(null)
+    setNotificationSent(false)
+  }
+
+  const handleAddCaretaker = async () => {
+    try {
+      const allCaretakers = await getUsers('caretaker')
+      const caretakerIds = caretakers.map(c => c.id)
+      const available = allCaretakers.filter(c => !caretakerIds.includes(c.id))
+      setAvailableCaretakers(available)
+      setShowAddCaretaker(true)
+    } catch (err) {
+      console.error('Failed to load caretakers:', err)
+    }
+  }
+
+  const handleLinkCaretaker = async (caretakerId) => {
+    try {
+      await linkCaretaker(user.id, caretakerId)
+      await loadCaretakers(user.id)
+      setShowAddCaretaker(false)
+      toast({
+        title: "✓ Caretaker Added",
+        description: "They will now receive your notifications.",
+        className: "bg-green-50 dark:bg-green-900/30 border-green-200 text-green-800"
+      })
+    } catch (err) {
+      console.error('Failed to link caretaker:', err)
+    }
+  }
+
+  const handleLogout = () => {
+    localStorage.removeItem('speechIntentUser')
+    navigate('/')
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-neu-base dark:bg-neu-base-dark flex items-center justify-center">
+        <div className="animate-pulse text-neu-text dark:text-neu-text-dark text-xl">
+          Loading...
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="h-screen bg-neu-base dark:bg-neu-base-dark flex flex-col items-center py-4 px-6 lg:px-12 font-sans text-neu-dark dark:text-neu-text-dark transition-colors duration-500 overflow-hidden">
+    <div className="min-h-screen bg-neu-base dark:bg-neu-base-dark flex flex-col items-center py-4 px-6 lg:px-12 font-sans text-neu-dark dark:text-neu-text-dark transition-colors duration-500 overflow-x-hidden">
       
-      {/* Header with Theme Toggle */}
+      {/* Header with User Info */}
       <motion.header 
         initial={{ opacity: 0, y: -20 }}
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-7xl flex flex-col md:flex-row items-center justify-between mb-4 flex-shrink-0 relative z-10"
       >
-        <div className="absolute right-0 top-0 md:static">
+        <div className="flex items-center gap-4">
           <ThemeToggle />
+          <Button
+            onClick={handleLogout}
+            className="bg-neu-base dark:bg-neu-base-dark shadow-neu-flat dark:shadow-neu-flat-dark hover:shadow-neu-pressed text-slate-600 dark:text-slate-300 px-3 py-2 rounded-xl text-sm"
+          >
+            Logout
+          </Button>
         </div>
 
         <div className="text-center w-full md:text-left md:w-auto mt-2 md:mt-0">
             <h1 className="text-2xl md:text-3xl lg:text-4xl font-extrabold tracking-tight text-slate-700 dark:text-slate-100">
-            VerbaOS
+              VerbaOS
             </h1>
-            <p className="text-neu-text dark:text-neu-text-dark mt-1 text-sm md:text-base italic font-medium">
-            Powered by HuBERT + wav2vec2
+            <p className="text-neu-text dark:text-neu-text-dark mt-1 text-sm md:text-base">
+              Welcome, <strong>{user.name}</strong>
+              <span className="text-xs ml-2 font-mono opacity-50">ID: {user.id}</span>
             </p>
         </div>
+
+        {/* Caretakers Badge */}
+        <button
+          onClick={handleAddCaretaker}
+          className="mt-2 md:mt-0 flex items-center gap-2 px-4 py-2 rounded-xl bg-neu-base dark:bg-neu-base-dark shadow-neu-flat dark:shadow-neu-flat-dark hover:shadow-neu-pressed transition-all"
+        >
+          <span className="text-2xl">👥</span>
+          <span className="text-sm font-medium text-slate-600 dark:text-slate-300">
+            {caretakers.length} Caretaker{caretakers.length !== 1 ? 's' : ''}
+          </span>
+        </button>
       </motion.header>
 
-      {/* System Diagram - Flexible Container */}
+      {/* System Diagram */}
       <div className="w-full max-w-[1400px] flex-shrink-0 mb-4 scale-90 origin-top">
         <DiagramLayout activeStep={diagramStep} />
       </div>
@@ -190,6 +321,11 @@ export default function Home() {
                   isRecording={false}
                   onClick={handleStart}
                />
+               {caretakers.length === 0 && (
+                 <p className="mt-4 text-sm text-orange-600 dark:text-orange-400 text-center">
+                   ⚠️ No caretakers linked. Add a caretaker to send notifications.
+                 </p>
+               )}
             </motion.div>
           )}
 
@@ -240,13 +376,24 @@ export default function Home() {
                className="w-full flex flex-col items-center justify-center h-full"
              >
                 <div className="scale-90 md:scale-100 origin-center w-full">
+                    {/* Notification Badge */}
+                    {notificationSent && (
+                      <motion.div
+                        initial={{ opacity: 0, y: -10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="mb-4 px-4 py-2 bg-blue-100 dark:bg-blue-900/30 rounded-xl text-center text-sm text-blue-700 dark:text-blue-300"
+                      >
+                        📢 Notification sent to {caretakers.length} caretaker(s)
+                      </motion.div>
+                    )}
+                    
                     <IntentCard 
                         intent={result.intent} 
                         confidence={result.confidence}
                         transcription={result.transcription}
                     />
                     
-                    {/* Feedback Section - YES/NO buttons */}
+                    {/* Feedback Section */}
                     <FeedbackButtons
                       embeddingId={result.embedding_id}
                       predictedIntent={result.intent}
@@ -254,7 +401,7 @@ export default function Home() {
                       isSubmitting={feedbackSubmitting}
                     />
                     
-                    {/* Original action buttons */}
+                    {/* Action Buttons */}
                     <ActionButtons 
                         intent={result.intent} 
                         onAction={handleAction} 
@@ -271,7 +418,7 @@ export default function Home() {
              </motion.div>
           )}
 
-          {/* FEEDBACK SUBMITTED State (after correction) */}
+          {/* FEEDBACK SUBMITTED State */}
           {appState === 'feedback_submitted' && (
             <motion.div
               key="feedback_submitted"
@@ -308,8 +455,86 @@ export default function Home() {
         </AnimatePresence>
       </main>
 
-      {/* Visitor Counter - Bottom Left */}
-      <VisitorCounter />
+      {/* Add Caretaker Modal */}
+      <AnimatePresence>
+        {showAddCaretaker && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50"
+            onClick={() => setShowAddCaretaker(false)}
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="w-full max-w-md"
+            >
+              <NeumorphicCard>
+                <h2 className="text-xl font-bold text-slate-700 dark:text-slate-100 mb-2">
+                  My Caretakers
+                </h2>
+                
+                {/* Current caretakers */}
+                {caretakers.length > 0 && (
+                  <div className="mb-4">
+                    <p className="text-sm text-neu-text dark:text-neu-text-dark mb-2">Currently linked:</p>
+                    <div className="space-y-2">
+                      {caretakers.map(c => (
+                        <div key={c.id} className="flex items-center gap-2 px-3 py-2 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                          <span className="text-green-600 dark:text-green-400">✓</span>
+                          <span className="text-slate-700 dark:text-slate-200">{c.name}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {/* Available caretakers to add */}
+                <p className="text-sm text-neu-text dark:text-neu-text-dark mb-2">Add a caretaker:</p>
+                {availableCaretakers.length === 0 ? (
+                  <p className="text-neu-text dark:text-neu-text-dark text-sm italic">
+                    No available caretakers. Ask caretakers to register first.
+                  </p>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {availableCaretakers.map((caretaker) => (
+                      <button
+                        key={caretaker.id}
+                        onClick={() => handleLinkCaretaker(caretaker.id)}
+                        className="w-full flex items-center gap-3 p-3 rounded-xl bg-neu-base dark:bg-neu-base-dark shadow-neu-flat dark:shadow-neu-flat-dark hover:shadow-neu-pressed transition-all"
+                      >
+                        <div className="w-10 h-10 rounded-full bg-purple-100 dark:bg-purple-900/40 flex items-center justify-center">
+                          <span className="font-bold text-purple-600 dark:text-purple-400">
+                            {caretaker.name.charAt(0).toUpperCase()}
+                          </span>
+                        </div>
+                        <div className="text-left">
+                          <div className="font-semibold text-slate-700 dark:text-slate-100">
+                            {caretaker.name}
+                          </div>
+                          <div className="text-xs text-neu-text dark:text-neu-text-dark font-mono">
+                            {caretaker.id}
+                          </div>
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+                )}
+                
+                <button
+                  onClick={() => setShowAddCaretaker(false)}
+                  className="mt-4 w-full text-center text-neu-text dark:text-neu-text-dark hover:underline"
+                >
+                  Close
+                </button>
+              </NeumorphicCard>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       <Toaster />
     </div>

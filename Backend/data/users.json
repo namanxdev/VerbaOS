@@ -1,0 +1,56 @@
+{
+  "patients": {
+    "3e9bdea9": {
+      "id": "3e9bdea9",
+      "name": "Patient",
+      "role": "patient",
+      "created_at": "2026-01-09T01:55:31.602118",
+      "caretakers": [
+        "a7372e2e"
+      ],
+      "patients": null
+    },
+    "1a2b4398": {
+      "id": "1a2b4398",
+      "name": "Patient",
+      "role": "patient",
+      "created_at": "2026-01-09T01:56:52.962716",
+      "caretakers": [
+        "a7372e2e"
+      ],
+      "patients": null
+    },
+    "7c537e34": {
+      "id": "7c537e34",
+      "name": "Patient",
+      "role": "patient",
+      "created_at": "2026-01-09T03:30:03.915823",
+      "caretakers": [
+        "a7372e2e"
+      ],
+      "patients": null
+    },
+    "c57b89e7": {
+      "id": "c57b89e7",
+      "name": "vinayak",
+      "role": "patient",
+      "created_at": "2026-01-09T03:35:50.851290",
+      "caretakers": [],
+      "patients": null
+    }
+  },
+  "caretakers": {
+    "a7372e2e": {
+      "id": "a7372e2e",
+      "name": "naman",
+      "role": "caretaker",
+      "created_at": "2026-01-09T01:56:19.983881",
+      "caretakers": null,
+      "patients": [
+        "3e9bdea9",
+        "1a2b4398",
+        "7c537e34"
+      ]
+    }
+  }
+}

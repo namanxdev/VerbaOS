@@ -1,6 +1,7 @@
 """
 Azure ML endpoint integration service.
 Supports HuBERT (primary) with Wav2Vec fallback.
+Includes hybrid classification for improved accuracy on aphasia speech.
 """
 
 import base64
@@ -118,11 +119,103 @@ async def call_azure_ml(audio_bytes: bytes) -> dict:
     )
 
 
+async def call_azure_ml_hybrid(audio_bytes: bytes) -> dict:
+    """
+    Call both HuBERT and Wav2Vec endpoints for hybrid classification.
+    Combines embedding-based and transcription-based approaches.
+    
+    This is more robust for aphasia patients because:
+    - HuBERT captures acoustic patterns (non-verbal sounds, tone, rhythm)
+    - Wav2Vec captures word-level patterns when speech is partially clear
+    
+    Args:
+        audio_bytes: Raw WAV audio bytes
+        
+    Returns:
+        dict: Combined response with both model outputs
+    """
+    audio_base64 = base64.b64encode(audio_bytes).decode("utf-8")
+    
+    results = {
+        "hubert_result": None,
+        "wav2vec_result": None,
+        "model_used": "hybrid"
+    }
+    
+    # Try HuBERT (embeddings)
+    if settings.HUBERT_SCORING_URL and settings.HUBERT_API_KEY:
+        try:
+            hubert_result = await _call_single_endpoint(
+                audio_base64,
+                settings.HUBERT_SCORING_URL,
+                settings.HUBERT_API_KEY,
+                "HuBERT"
+            )
+            results["hubert_result"] = hubert_result
+        except Exception as e:
+            print(f"[WARNING] HuBERT failed in hybrid mode: {e}")
+    
+    # Try Wav2Vec (transcription)
+    if settings.WAVE2VEC_SCORING_URL and settings.WAVE2VEC_API_KEY:
+        try:
+            wav2vec_result = await _call_single_endpoint(
+                audio_base64,
+                settings.WAVE2VEC_SCORING_URL,
+                settings.WAVE2VEC_API_KEY,
+                "Wav2Vec"
+            )
+            results["wav2vec_result"] = wav2vec_result
+        except Exception as e:
+            print(f"[WARNING] Wav2Vec failed in hybrid mode: {e}")
+    
+    # If neither worked, raise error
+    if results["hubert_result"] is None and results["wav2vec_result"] is None:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Both HuBERT and Wav2Vec endpoints failed in hybrid mode",
+        )
+    
+    return results
+
+
+def _combine_predictions(
+    hubert_intent: str, hubert_confidence: float,
+    wav2vec_intent: str, wav2vec_confidence: float
+) -> tuple[str, float]:
+    """
+    Combine predictions from HuBERT (embedding) and Wav2Vec (transcription).
+    
+    Strategy:
+    - If both agree: boost confidence
+    - If disagree: use higher confidence one, with penalty
+    - Weight HuBERT slightly higher for aphasia (acoustic patterns matter more)
+    """
+    HUBERT_WEIGHT = 0.6  # Slightly favor HuBERT for acoustic patterns
+    WAV2VEC_WEIGHT = 0.4
+    
+    if hubert_intent == wav2vec_intent:
+        # Agreement - boost confidence
+        combined_conf = min(1.0, (hubert_confidence * HUBERT_WEIGHT + wav2vec_confidence * WAV2VEC_WEIGHT) * 1.15)
+        return hubert_intent, combined_conf
+    
+    # Disagreement - use weighted decision
+    hubert_score = hubert_confidence * HUBERT_WEIGHT
+    wav2vec_score = wav2vec_confidence * WAV2VEC_WEIGHT
+    
+    if hubert_score >= wav2vec_score:
+        # Use HuBERT but penalize for disagreement
+        return hubert_intent, hubert_confidence * 0.85
+    else:
+        # Use Wav2Vec but penalize
+        return wav2vec_intent, wav2vec_confidence * 0.85
+
+
 def process_ml_response(ml_response: dict) -> tuple[str, float, str, list[str], list[float]]:
     """
     Process Azure ML response and extract intent/confidence.
     
     Handles multiple response formats:
+    - Hybrid: {"hubert_result": {...}, "wav2vec_result": {...}} -> combined classification
     - Embeddings: {"embeddings": [...]} -> cosine similarity matching
     - Transcription: {"transcription": "..."} -> keyword matching
     - Direct intent: {"intent": "HELP", "confidence": 0.92}
@@ -136,6 +229,10 @@ def process_ml_response(ml_response: dict) -> tuple[str, float, str, list[str], 
     transcription = ""
     alternatives = []
     embedding = []
+    
+    # Hybrid response - combine both models
+    if "hubert_result" in ml_response or "wav2vec_result" in ml_response:
+        return _process_hybrid_response(ml_response)
     
     # HuBERT embeddings response - use cosine similarity
     if "embeddings" in ml_response:
@@ -157,6 +254,52 @@ def process_ml_response(ml_response: dict) -> tuple[str, float, str, list[str], 
     
     # Unknown response format
     return "UNKNOWN", 0.0, "", INTENTS[:3], []
+
+
+def _process_hybrid_response(ml_response: dict) -> tuple[str, float, str, list[str], list[float]]:
+    """
+    Process hybrid response combining HuBERT and Wav2Vec predictions.
+    """
+    hubert_result = ml_response.get("hubert_result")
+    wav2vec_result = ml_response.get("wav2vec_result")
+    
+    hubert_intent, hubert_conf = "UNKNOWN", 0.0
+    wav2vec_intent, wav2vec_conf = "UNKNOWN", 0.0
+    transcription = ""
+    embedding = []
+    alternatives = []
+    
+    # Process HuBERT result
+    if hubert_result and "embeddings" in hubert_result:
+        embedding = hubert_result["embeddings"]
+        hubert_intent, hubert_conf, alternatives = predict_intent(embedding)
+        print(f"[DEBUG] HuBERT prediction: {hubert_intent} ({hubert_conf:.2f})")
+    
+    # Process Wav2Vec result
+    if wav2vec_result and "transcription" in wav2vec_result:
+        transcription = wav2vec_result["transcription"]
+        wav2vec_intent, wav2vec_conf = detect_intent_from_transcription(transcription)
+        print(f"[DEBUG] Wav2Vec prediction: {wav2vec_intent} ({wav2vec_conf:.2f}) from '{transcription}'")
+    
+    # If only one model worked, use it
+    if hubert_intent == "UNKNOWN" and wav2vec_intent != "UNKNOWN":
+        return wav2vec_intent, wav2vec_conf, transcription, [], embedding
+    if wav2vec_intent == "UNKNOWN" and hubert_intent != "UNKNOWN":
+        return hubert_intent, hubert_conf, transcription, alternatives, embedding
+    if hubert_intent == "UNKNOWN" and wav2vec_intent == "UNKNOWN":
+        return "UNKNOWN", 0.0, transcription, INTENTS[:3], embedding
+    
+    # Both models produced results - combine them
+    final_intent, final_conf = _combine_predictions(
+        hubert_intent, hubert_conf,
+        wav2vec_intent, wav2vec_conf
+    )
+    
+    print(f"[DEBUG] Hybrid prediction: {final_intent} ({final_conf:.2f})")
+    print(f"[DEBUG]   HuBERT: {hubert_intent} ({hubert_conf:.2f})")
+    print(f"[DEBUG]   Wav2Vec: {wav2vec_intent} ({wav2vec_conf:.2f}) - '{transcription}'")
+    
+    return final_intent, final_conf, transcription, alternatives, embedding
 
 
 async def check_ml_endpoint_health() -> dict:

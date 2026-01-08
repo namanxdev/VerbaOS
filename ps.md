@@ -1,0 +1,11 @@
+## Use both models and improve accuracy
+till now in backend the audio input is being taken as input, and they are classified into different categories either using hubert model or wav2vec2 model which i dont know to be sure....in which hubert takes input and give output as embeddings and wav2vec2 gives output as transcriptions. since the input we will get wil be from users with stroke aphasia etc. who arent able to speak clearly....we need to get their audio as input as classify into different intents for us to understand them....for now the input we are giving shows us wrong classification i need you to fix it..firstly understand and tell me how backend is w orking then use these models to build me a solution which gives more accurate result, i dont need it to be perfect since i know different users will have different way to speaking so we can use only a paricular set of data to classify 
+
+## Yes or No Confirmation
+Since still i am not getting accurate result i will just make a confirmation segment as well with yes and no button if the user will that gave input is shown the accurate output it will show 2 buttons will be shown if the user selects yes it will be used as feedback for our system that will tell our system yes this is the pattern and phonetcs that are being used for water....if no then feedback will tell these audio means something else...add this system in backend as well as frontend
+
+## Counter at the bottom
+add a counter in ui at bottom left to show the no. of people who visited our website and it should go back to zero if new user join in our website instead the counter should +1 the count, basically this is done to show how many users we have 
+
+##  User Differentiator
+One will be patient and other will caretaker - in this the one we made right now is for patients what i want is when someone visit our page they will see option of either patient or caretaker...so what ever the patient will say it will get visible to caretaker's account so that caretaker can take care of the patient...example if the patients use app to ask for medicine..the notification will go to caretaker so they can come and help the patient, now the patient can have multiple caretaker - nurse, parents, siblings etc. and so does caretaker have multiple patients so in caretaker ui i want the names and message they sent to be there in ui

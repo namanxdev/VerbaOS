@@ -11,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.config import settings
-from app.routes import audio_router, health_router
+from app.routes import audio_router, health_router, users_router
 
 
 # Create FastAPI application
@@ -67,6 +67,7 @@ app.add_middleware(
 # Register routers
 app.include_router(audio_router)
 app.include_router(health_router)
+app.include_router(users_router)
 
 
 # Custom exception handler for consistent error responses
