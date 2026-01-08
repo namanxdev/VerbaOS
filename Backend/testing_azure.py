@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
-# Get configuration from environment variables - Use HuBERT (primary)
+# Get configuration from environment variables
 url = os.getenv('REST_END_POINT__HUBERT')
 api_key = os.getenv('PRIMARY_KEY__HUBERT')
 
