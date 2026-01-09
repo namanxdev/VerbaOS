@@ -12,6 +12,15 @@ load_dotenv()
 class Settings:
     """Application settings loaded from environment variables."""
     
+    # Azure PostgreSQL Database Configuration
+    DATABASE_URL: str = os.getenv("DATABASE_URL", "")
+    DATABASE_HOST: str = os.getenv("DATABASE_HOST", "")
+    DATABASE_NAME: str = os.getenv("DATABASE_NAME", "postgres")
+    DATABASE_USER: str = os.getenv("DATABASE_USER", "")
+    DATABASE_PASSWORD: str = os.getenv("DATABASE_PASSWORD", "")
+    DATABASE_PORT: int = int(os.getenv("DATABASE_PORT", "5432"))
+    DATABASE_SSL: str = os.getenv("DATABASE_SSL", "require")
+    
     # Azure ML Configuration - HuBERT (Primary)
     HUBERT_SCORING_URL: str = os.getenv("REST_END_POINT__HUBERT", "")
     HUBERT_API_KEY: str = os.getenv("PRIMARY_KEY__HUBERT", "")
